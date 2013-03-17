@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2013, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,14 +33,10 @@ void vcd_do_device_state_transition(struct vcd_drv_ctxt *drv_ctxt,
 {
 	struct vcd_dev_state_ctxt *state_ctxt;
 
-	if (!drv_ctxt) {
-		VCD_MSG_ERROR("Bad parameters. drv_ctxt error");
-		return;
-	}
-
-	if (to_state >= VCD_DEVICE_STATE_MAX) {
+	if (!drv_ctxt || to_state >= VCD_DEVICE_STATE_MAX) {
 		VCD_MSG_ERROR("Bad parameters. drv_ctxt=%p, to_state=%d",
 				  drv_ctxt, to_state);
+		return;
 	}
 
 	state_ctxt = &drv_ctxt->dev_state;
@@ -134,10 +130,16 @@ void vcd_ddl_callback(u32 event, u32 status, void *payload,
 		{
 			transc = (struct vcd_transc *)client_data;
 
-			if (!transc || !transc->in_use
-				|| !transc->cctxt) {
+			if (!transc || !transc->in_use || !transc->cctxt) {
 				VCD_MSG_ERROR("Invalid clientdata "
-							  "received from DDL ");
+					"received from DDL, transc = 0x%x\n",
+					(u32)transc);
+				if (transc) {
+					VCD_MSG_ERROR("transc->in_use = %u, "
+						"transc->cctxt = 0x%x\n",
+						transc->in_use,
+						(u32)transc->cctxt);
+				}
 			} else {
 				cctxt = transc->cctxt;
 
@@ -218,7 +220,6 @@ u32 vcd_init_device_context(struct vcd_drv_ctxt *drv_ctxt,
 						   VCD_DEVICE_STATE_INITING,
 						   ev_code);
 	}
-
 	return rc;
 }
 
@@ -535,12 +536,12 @@ static u32 vcd_init_cmn
 	*driver_handle = 0;
 
 	driver_id = 0;
-	while (driver_id < VCD_DRIVER_INSTANCE_MAX &&
+	while (driver_id < VCD_DRIVER_CLIENTS_MAX &&
 		   dev_ctxt->driver_ids[driver_id]) {
 		++driver_id;
 	}
 
-	if (driver_id == VCD_DRIVER_INSTANCE_MAX) {
+	if (driver_id == VCD_DRIVER_CLIENTS_MAX) {
 		VCD_MSG_ERROR("Max driver instances reached");
 
 		return VCD_ERR_FAIL;
@@ -855,7 +856,7 @@ static u32 vcd_close_in_ready
 	} else {
 		VCD_MSG_ERROR("Unsupported API in client state %d",
 				  cctxt->clnt_state.state);
-
+		vcd_destroy_client_context(cctxt);
 		rc = VCD_ERR_BAD_STATE;
 	}
 

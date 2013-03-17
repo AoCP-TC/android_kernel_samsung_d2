@@ -24,6 +24,8 @@
 #include <mach/msm8960-gpio.h>
 #include "board-8960.h"
 
+extern int system_rev;
+
 #define MSM_8960_GSBI3_QUP_I2C_BUS_ID 3
 
 #define GPIO_TOUCH_IRQ		11
@@ -70,7 +72,6 @@ void  melfas_vdd_on(bool onoff)
 	int ret = 0;
 	/* 3.3V */
 	static struct regulator *reg_l17;
-	static struct regulator *reg_l11;
 	/* 1.8V */
 #ifdef CONFIG_MACH_M2_VZW
 	if (system_rev < BOARD_REV02) {
@@ -82,7 +83,8 @@ void  melfas_vdd_on(bool onoff)
 #endif
 	{
 #if !defined(CONFIG_MACH_ESPRESSO_VZW) && !defined(CONFIG_MACH_ESPRESSO_ATT) \
-				&& !defined(CONFIG_MACH_ESPRESSO10_VZW)
+				&& !defined(CONFIG_MACH_ESPRESSO10_VZW) \
+				&& !defined(CONFIG_MACH_ESPRESSO_SPR)
 		static struct regulator *reg_lvs6;
 
 		if (!reg_lvs6) {
@@ -147,7 +149,7 @@ void  melfas_vdd_on(bool onoff)
 	}
 #else
 		/* 2.8V */
-		if (system_rev < BOARD_REV03) {
+		if (machine_is_ESPRESSO_VZW() && system_rev < BOARD_REV03) {
 			if (!reg_l17) {
 				reg_l17 = regulator_get(NULL, "8921_l17");
 				if (IS_ERR(reg_l17)) {
@@ -231,9 +233,10 @@ int is_melfas_vdd_on(void)
 	int ret;
 	/* 3.3V */
 	static struct regulator *reg_l17;
-	static struct regulator *reg_l11;
 #if defined(CONFIG_MACH_ESPRESSO_VZW) || defined(CONFIG_MACH_ESPRESSO_ATT) \
-				|| defined(CONFIG_MACH_ESPRESSO10_VZW)
+				|| defined(CONFIG_MACH_ESPRESSO10_VZW) \
+				|| defined(CONFIG_MACH_ESPRESSO_SPR)
+	static struct regulator *reg_l11;
 	if (system_rev < BOARD_REV03) {
 		if (!reg_l17) {
 			reg_l17 = regulator_get(NULL, "8921_l17");
@@ -319,7 +322,8 @@ static struct mms_ts_platform_data mms_ts_pdata = {
 #if defined(CONFIG_TOUCHSCREEN_MMS136) || \
 	defined(CONFIG_TOUCHSCREEN_MMS136_TABLET)
 #if defined(CONFIG_MACH_ESPRESSO_VZW) || defined(CONFIG_MACH_ESPRESSO_ATT) \
-				|| defined(CONFIG_MACH_ESPRESSO10_VZW)
+				|| defined(CONFIG_MACH_ESPRESSO10_VZW) \
+				|| defined(CONFIG_MACH_ESPRESSO_SPR)
 	.max_x		= 1024,
 	.max_y		= 600,
 	.config_fw_version = "I705_MELFAS_0313",

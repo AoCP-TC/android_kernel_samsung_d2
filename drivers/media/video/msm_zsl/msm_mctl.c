@@ -364,6 +364,19 @@ static int msm_mctl_cmd(struct msm_cam_media_controller *p_mctl,
 		break;
 	}
 
+	case MSM_CAM_IOCTL_GET_KERNEL_SYSTEM_TIME: {
+		struct timeval timestamp;
+		if (copy_from_user(&timestamp, argp, sizeof(timestamp))) {
+			ERR_COPY_FROM_USER();
+			rc = -EFAULT;
+		} else {
+			msm_mctl_gettimeofday(&timestamp);
+			rc = copy_to_user((void *)argp,
+				 &timestamp, sizeof(timestamp));
+		}
+		break;
+	}
+
 	case MSM_CAM_IOCTL_FLASH_CTRL: {
 		struct flash_ctrl_data flash_info;
 		if (copy_from_user(&flash_info, argp, sizeof(flash_info))) {
@@ -434,7 +447,7 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 		goto out_put_driver;
 
 	p_mctl->csiphy_sdev = dev_get_drvdata(dev);
-	put_driver(driver);
+//	put_driver(driver);
 
 	/* register csid subdev */
 	driver = driver_find(MSM_CSID_DRV_NAME, &platform_bus_type);
@@ -447,7 +460,7 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 		goto out_put_driver;
 
 	p_mctl->csid_sdev = dev_get_drvdata(dev);
-	put_driver(driver);
+//	put_driver(driver);
 
 	/* register ispif subdev */
 	driver = driver_find(MSM_ISPIF_DRV_NAME, &platform_bus_type);
@@ -460,7 +473,7 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 		goto out_put_driver;
 
 	p_mctl->ispif_sdev = dev_get_drvdata(dev);
-	put_driver(driver);
+//	put_driver(driver);
 
 	/* register vfe subdev */
 	driver = driver_find(MSM_VFE_DRV_NAME, &platform_bus_type);
@@ -473,7 +486,7 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 		goto out_put_driver;
 
 	p_mctl->isp_sdev->sd = dev_get_drvdata(dev);
-	put_driver(driver);
+//	put_driver(driver);
 
 	/* register vfe subdev */
 	driver = driver_find(MSM_VPE_DRV_NAME, &platform_bus_type);
@@ -486,12 +499,12 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 		goto out_put_driver;
 
 	p_mctl->isp_sdev->sd_vpe = dev_get_drvdata(dev);
-	put_driver(driver);
+//	put_driver(driver);
 
 	rc = 0;
 	return rc;
 out_put_driver:
-	put_driver(driver);
+//	put_driver(driver);
 out:
 	return rc;
 }
@@ -578,10 +591,10 @@ static int msm_mctl_open_init(struct msm_cam_media_controller *p_mctl,
 		goto fail7;
 	}
 
-	pm_qos_add_request(&p_mctl->pm_qos_req_list,
+	pm_qos_add_request(p_mctl->pm_qos_req_list,
 				PM_QOS_CPU_DMA_LATENCY,
 				PM_QOS_DEFAULT_VALUE);
-	pm_qos_update_request(&p_mctl->pm_qos_req_list,
+	pm_qos_update_request(p_mctl->pm_qos_req_list,
 				MSM_V4L2_SWFI_LATENCY);
 
 	sync->apps_id = apps_id;
@@ -661,9 +674,9 @@ static int msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 		pr_err("%s: msm_camio_sensor_clk_off failed:%d\n",
 			 __func__, rc);
 
-	pm_qos_update_request(&p_mctl->pm_qos_req_list,
+	pm_qos_update_request(p_mctl->pm_qos_req_list,
 				PM_QOS_DEFAULT_VALUE);
-	pm_qos_remove_request(&p_mctl->pm_qos_req_list);
+	pm_qos_remove_request(p_mctl->pm_qos_req_list);
 	wake_unlock(&p_mctl->sync.wake_lock);
 
 	return rc;

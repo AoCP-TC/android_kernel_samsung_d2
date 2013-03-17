@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,7 +28,7 @@ struct vidc_dev {
 	struct device *device;
 	resource_size_t phys_base;
 	void __iomem *virt_base;
-	int irq;
+	unsigned int irq;
 	unsigned int ref_count;
 	unsigned int firmware_refcount;
 	unsigned int get_firmware;

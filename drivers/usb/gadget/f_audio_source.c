@@ -22,8 +22,6 @@
 #include <sound/pcm.h>
 
 #define SAMPLE_RATE 44100
-/* Each frame is two 16 bit integers (one per channel) */
-#define BYTES_PER_FRAME 4
 #define FRAMES_PER_MSEC (SAMPLE_RATE / 1000)
 
 #define IN_EP_MAX_PACKET_SIZE 256
@@ -245,7 +243,6 @@ struct audio_dev {
 
 	struct list_head		idle_reqs;
 	struct usb_ep			*in_ep;
-	struct usb_endpoint_descriptor	*in_desc;
 
 	spinlock_t			lock;
 
@@ -414,7 +411,7 @@ static void audio_data_complete(struct usb_ep *ep, struct usb_request *req)
 
 	audio_req_put(audio, req);
 
-	if (!audio->buffer_start)
+	if (!audio->buffer_start || req->status)
 		return;
 
 	audio->period_offset += req->actual;
@@ -526,9 +523,24 @@ audio_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 static int audio_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 {
 	struct audio_dev *audio = func_to_audio(f);
+	struct usb_composite_dev *cdev = f->config->cdev;
+	int ret;
 
 	pr_debug("audio_set_alt intf %d, alt %d\n", intf, alt);
-	usb_ep_enable(audio->in_ep, audio->in_desc);
+
+	ret = config_ep_by_speed(cdev->gadget, f, audio->in_ep);
+	if (ret) {
+		audio->in_ep->desc = NULL;
+		ERROR(cdev, "config_ep_by_speed failes for ep %s, result %d\n",
+				audio->in_ep->name, ret);
+			return ret;
+	}
+	ret = usb_ep_enable(audio->in_ep);
+	if (ret) {
+		ERROR(cdev, "failed to enable ep %s, result %d\n",
+			audio->in_ep->name, ret);
+		return ret;
+	}
 	return 0;
 }
 
@@ -595,9 +607,6 @@ audio_bind(struct usb_configuration *c, struct usb_function *f)
 		hs_as_in_ep_desc.bEndpointAddress =
 			fs_as_in_ep_desc.bEndpointAddress;
 
-	f->descriptors = fs_audio_desc;
-	f->hs_descriptors = hs_audio_desc;
-
 	for (i = 0, status = 0; i < IN_EP_REQ_COUNT && status == 0; i++) {
 		req = audio_request_new(ep, IN_EP_MAX_PACKET_SIZE);
 		if (req) {
@@ -622,7 +631,10 @@ audio_unbind(struct usb_configuration *c, struct usb_function *f)
 		audio_request_free(req, audio->in_ep);
 
 	snd_card_free_when_closed(audio->card);
-	kfree(audio);
+	audio->card = NULL;
+	audio->pcm = NULL;
+	audio->substream = NULL;
+	audio->in_ep = NULL;
 }
 
 static void audio_pcm_playback_start(struct audio_dev *audio)
@@ -738,6 +750,21 @@ static int audio_pcm_playback_trigger(struct snd_pcm_substream *substream,
 	return ret;
 }
 
+static struct audio_dev _audio_dev = {
+	.func = {
+		.name = "audio_source",
+		.bind = audio_bind,
+		.unbind = audio_unbind,
+		.set_alt = audio_set_alt,
+		.setup = audio_setup,
+		.disable = audio_disable,
+		.descriptors = fs_audio_desc,
+		.hs_descriptors = hs_audio_desc,
+	},
+	.lock = __SPIN_LOCK_UNLOCKED(_audio_dev.lock),
+	.idle_reqs = LIST_HEAD_INIT(_audio_dev.idle_reqs),
+};
+
 static struct snd_pcm_ops audio_playback_ops = {
 	.open		= audio_pcm_open,
 	.close		= audio_pcm_close,
@@ -760,27 +787,12 @@ int audio_source_bind_config(struct usb_configuration *c,
 	config->card = -1;
 	config->device = -1;
 
-	audio = kzalloc(sizeof *audio, GFP_KERNEL);
-	if (!audio)
-		return -ENOMEM;
-
-	audio->func.name = "audio_source";
-
-	spin_lock_init(&audio->lock);
-
-	audio->func.bind = audio_bind;
-	audio->func.unbind = audio_unbind;
-	audio->func.set_alt = audio_set_alt;
-	audio->func.setup = audio_setup;
-	audio->func.disable = audio_disable;
-	audio->in_desc = &fs_as_in_ep_desc;
-
-	INIT_LIST_HEAD(&audio->idle_reqs);
+	audio = &_audio_dev;
 
 	err = snd_card_create(SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1,
 			THIS_MODULE, 0, &card);
 	if (err)
-		goto snd_card_fail;
+		return err;
 
 	snd_card_set_dev(card, &c->cdev->gadget->dev);
 
@@ -819,7 +831,5 @@ add_fail:
 register_fail:
 pcm_fail:
 	snd_card_free(audio->card);
-snd_card_fail:
-	kfree(audio);
 	return err;
 }

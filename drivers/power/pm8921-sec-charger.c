@@ -28,7 +28,7 @@
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
 #include <linux/slab.h>
-
+#include <asm/system_info.h>
 #include <mach/msm_xo.h>
 #include <mach/msm_hsusb.h>
 #include <linux/mfd/pm8xxx/pm8921-sec-charger.h>
@@ -333,7 +333,10 @@ static int is_pm8921_sec_charger_using(void)
 #elif defined(CONFIG_MACH_GOGH)
 	if (system_rev >= 0x1)
 		return 0;
-#elif defined(CONFIG_MACH_M2_DCM)
+#elif defined(CONFIG_MACH_INFINITE)
+	if (system_rev >= 0x1)
+		return 0;
+#elif defined(CONFIG_MACH_M2_DCM) || defined(CONFIG_MACH_K2_KDI)
 	if (system_rev >= 0x1)
 		return 0;
 #elif defined(CONFIG_MACH_AEGIS2)
@@ -359,6 +362,14 @@ static int is_pm8921_sec_charger_using(void)
 #elif defined(CONFIG_MACH_ESPRESSO_ATT)
 	return 0;
 #elif defined(CONFIG_MACH_ESPRESSO10_VZW)
+	return 0;
+#elif defined(CONFIG_MACH_ESPRESSO10_SPR)
+	return 0;
+#elif defined(CONFIG_MACH_ESPRESSO10_ATT)
+	return 0;
+#elif defined(CONFIG_MACH_STRETTO)
+	return 0;
+#elif defined(CONFIG_MACH_SUPERIORLTE_SKT)
 	return 0;
 #endif
 	return 1;
@@ -558,6 +569,7 @@ static int pm_chg_charge_dis(struct pm8921_chg_chip *chip, int disable)
 				disable ? CHG_CHARGE_DIS_BIT : 0);
 }
 
+#ifdef QUALCOMM_POWERSUPPLY_PROPERTY
 static bool pm_is_chg_charge_dis_bit_set(struct pm8921_chg_chip *chip)
 {
 	u8 temp = 0;
@@ -569,6 +581,7 @@ static bool pm_is_chg_charge_dis_bit_set(struct pm8921_chg_chip *chip)
 
 	return !!(temp & CHG_CHARGE_DIS_BIT);
 }
+#endif
 
 #define PM8921_CHG_V_MIN_MV	3240
 #define PM8921_CHG_V_STEP_MV	20
@@ -942,6 +955,7 @@ static int pm_chg_iweak_set(struct pm8921_chg_chip *chip, int milliamps)
 
 #define PM8921_CHG_BATT_TEMP_THR_COLD	BIT(1)
 #define PM8921_CHG_BATT_TEMP_THR_COLD_SHIFT	1
+#ifdef QUALCOMM_POWERSUPPLY_PROPERTY
 static int pm_chg_batt_cold_temp_config(struct pm8921_chg_chip *chip,
 					enum pm8921_chg_cold_thr cold_thr)
 {
@@ -953,9 +967,10 @@ static int pm_chg_batt_cold_temp_config(struct pm8921_chg_chip *chip,
 					PM8921_CHG_BATT_TEMP_THR_COLD,
 					 temp);
 }
-
+#endif
 #define PM8921_CHG_BATT_TEMP_THR_HOT		BIT(0)
 #define PM8921_CHG_BATT_TEMP_THR_HOT_SHIFT	0
+#ifdef QUALCOMM_TEMPERATURE_CONTROL
 static int pm_chg_batt_hot_temp_config(struct pm8921_chg_chip *chip,
 					enum pm8921_chg_hot_thr hot_thr)
 {
@@ -967,7 +982,7 @@ static int pm_chg_batt_hot_temp_config(struct pm8921_chg_chip *chip,
 					PM8921_CHG_BATT_TEMP_THR_HOT,
 					 temp);
 }
-
+#endif
 static int64_t read_battery_id(struct pm8921_chg_chip *chip)
 {
 	int rc;
@@ -1111,7 +1126,7 @@ static int is_battery_charging(int fsm_state)
 	}
 	return 0;
 }
-
+#if 0
 static void bms_notify(struct work_struct *work)
 {
 	struct bms_notify *n = container_of(work, struct bms_notify, work);
@@ -1123,7 +1138,7 @@ static void bms_notify(struct work_struct *work)
 		n->is_battery_full = 0;
 	}
 }
-
+#endif
 static void bms_notify_check(struct pm8921_chg_chip *chip)
 {
 	int fsm_state, new_is_charging;
@@ -1242,7 +1257,7 @@ static int get_prop_battery_uvolts(struct pm8921_chg_chip *chip)
 	return (int)result.physical;
 #endif
 }
-
+#ifndef CONFIG_BATTERY_MAX17040
 static unsigned int voltage_based_capacity(struct pm8921_chg_chip *chip)
 {
 	unsigned int current_voltage_uv = get_prop_battery_uvolts(chip);
@@ -1258,7 +1273,7 @@ static unsigned int voltage_based_capacity(struct pm8921_chg_chip *chip)
 		return (current_voltage_mv - low_voltage) * 100
 		    / (high_voltage - low_voltage);
 }
-
+#endif
 static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 {
 #if defined(CONFIG_BATTERY_MAX17040) || \
@@ -2063,7 +2078,8 @@ static irqreturn_t batt_inserted_irq_handler(int irq, void *data)
 	power_supply_changed(&chip->batt_psy);
 	return IRQ_HANDLED;
 }
-
+#if !defined(CONFIG_BATTERY_MAX17040) && \
+        !defined(CONFIG_BATTERY_MAX17042)
 /*
  * this interrupt used to restart charging a battery.
  *
@@ -2093,7 +2109,7 @@ static irqreturn_t vbatdet_low_irq_handler(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
-
+#endif
 static irqreturn_t usbin_uv_irq_handler(int irq, void *data)
 {
 	pr_err("USB UnderVoltage\n");
@@ -2752,6 +2768,7 @@ static void set_appropriate_battery_current(struct pm8921_chg_chip *chip)
 }
 
 #define TEMP_HYSTERISIS_DEGC 2
+#ifdef QUALCOMM_TEMPERATURE_CONTROL
 static void battery_cool(bool enter)
 {
 	pr_debug("enter = %d\n", enter);
@@ -2801,7 +2818,8 @@ static void battery_warm(bool enter)
 	}
 	schedule_work(&btm_config_work);
 }
-
+#endif
+#ifdef QUALCOMM_TEMPERATURE_CONTROL
 static int configure_btm(struct pm8921_chg_chip *chip)
 {
 	int rc;
@@ -2820,7 +2838,7 @@ static int configure_btm(struct pm8921_chg_chip *chip)
 
 	return rc;
 }
-
+#endif
 /**
  * set_disable_status_param -
  *
@@ -4094,7 +4112,11 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 
 	create_debugfs_entries(chip);
 	/* create sec detail attributes */
-	sec_bat_create_attrs(chip->batt_psy.dev);
+	rc = sec_bat_create_attrs(chip->batt_psy.dev);
+	if (rc) {
+		pr_err("couldn't create attrs rc=%d\n", rc);
+		goto unregister_batt;
+	}
 
 	chip->entry = create_proc_entry("batt_info_proc", S_IRUGO, NULL);
 	if (!chip->entry) {

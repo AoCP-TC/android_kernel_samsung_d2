@@ -15,6 +15,7 @@
  *
  */
 #include <linux/interrupt.h>
+#include <linux/module.h>
 #include <linux/i2c.h>
 #include <linux/irq.h>
 #include <linux/miscdevice.h>
@@ -367,6 +368,42 @@ static unsigned char phonecall_receiver_nson[] = {
 	0x80, 0x31, 0x00, 0x00,
 };
 
+static unsigned char ft_loopback[] = {
+	0x80, 0x31, 0x00, 0x00,
+	0x80, 0x1B, 0x00, 0x00,	
+	0x80, 0x1B, 0x01, 0x00,	
+	0x80, 0x1B, 0x02, 0x00,
+	0x80, 0x1B, 0x03, 0x00,
+	0x80, 0x1B, 0x04, 0x00,
+	0x80, 0x1B, 0x05, 0x00,	
+	0x80, 0x1B, 0x06, 0x00,	
+	0x80, 0x1B, 0x07, 0x00,	
+	0x80, 0x15, 0x00, 0x00,
+	0x80, 0x15, 0x01, 0x00,
+	0x80, 0x15, 0x02, 0x00,
+	0x80, 0x15, 0x03, 0x00,
+	0x80, 0x15, 0x04, 0x00,
+	0x80, 0x15, 0x05, 0x00,	
+	0x80, 0x15, 0x06, 0x00,	
+	0x80, 0x15, 0x07, 0x00,	
+	0x80, 0x17, 0x00, 0x4B,
+	0x80, 0x18, 0x00, 0x00,	
+	0x80, 0x17, 0x00, 0x42,
+	0x80, 0x18, 0x00, 0x00,		
+	0x80, 0x17, 0x00, 0x40,
+	0x80, 0x18, 0x00, 0x00,		
+	0x80, 0x17, 0x00, 0x0D,
+	0x80, 0x18, 0x00, 0x00,	
+	0x80, 0x17, 0x00, 0x20,
+	0x80, 0x18, 0x00, 0x00,		
+	0x80, 0x17, 0x00, 0x1F,
+	0x80, 0x18, 0x00, 0x00,			
+	0x80, 0x17, 0x00, 0x30,
+	0x80, 0x18, 0x00, 0x00,		
+	0x80, 0x17, 0x00, 0x31,
+	0x80, 0x18, 0x00, 0x00,				
+};
+
 static unsigned char phonecall_receiver_nson_wb[] = {
 	0x80, 0x31, 0x00, 0x02,
 };
@@ -557,9 +594,13 @@ static unsigned char suspend_mode[] = {
 	0x80, 0x10, 0x00, 0x01
 };
 
+static unsigned char pcm_reset[] = {
+	0x80, 0x31, 0x00, 0x00
+};
+
 static ssize_t chk_wakeup_a2220(struct a2220_data *a2220)
 {
-	int i, rc = 0, retry = 4;
+	int rc = 0, retry = 4;
 
 	if (a2220->suspended == 1) {
 		mdelay(1);
@@ -647,7 +688,8 @@ int a2220_set_config(struct a2220_data *a2220, char newid, int mode)
 	if ((a2220->suspended) && (newid == A2220_PATH_SUSPEND))
 		return rc;
 
-	if (a2220_current_config == newid) {
+	if ((a2220_current_config == newid) &&
+		(a2220_current_config != A2220_PATH_PCMRESET)) {
 		pr_info("already configured this path!!!\n");
 		return rc;
 	}
@@ -750,6 +792,15 @@ int a2220_set_config(struct a2220_data *a2220, char newid, int mode)
 		i2c_cmds = BACK_MIC_recording;
 		size = sizeof(BACK_MIC_recording);
 		break;
+	case A2220_PATH_PCMRESET:
+		i2c_cmds = pcm_reset;
+		size = sizeof(pcm_reset);
+		msleep(30);
+		break;
+	case A2220_PATH_FT_LOOPBACK:
+		i2c_cmds = ft_loopback;
+		size = sizeof(ft_loopback);
+		break;		
 	default:
 		pr_err("%s: invalid cmd %d\n", __func__, newid);
 		rc = -1;
@@ -958,7 +1009,7 @@ static long a2220_ioctl(struct file *file, unsigned int cmd,
 			struct a2220_data, device);
 	static struct task_struct *task;
 	int rc = 0;
-#if ENABLE_DIAG_IOCTLS
+#if 0
 	char msg[4];
 	int mic_cases = 0;
 	int mic_sel = 0;
@@ -996,7 +1047,7 @@ static long a2220_ioctl(struct file *file, unsigned int cmd,
 					A2220_CONFIG_VP);
 		mutex_unlock(&a2220->lock);
 		break;
-#if ENABDIAG_IOCTLS
+#if 0
 	case A2220_SET_MIC_ONOFF:
 		mutex_lock(&a2220->lock);
 		rc = chk_wakeup_a2220(a2220);
@@ -1074,7 +1125,7 @@ static long a2220_ioctl(struct file *file, unsigned int cmd,
 			rc = exe_cmd_in_file(msg);
 		mutex_unlock(&a2220->lock);
 		break;
-#endif /* ENABLE_DIAG_IOCTLS */
+#endif
 	default:
 		pr_err("%s: invalid command %d\n", __func__, _IOC_NR(cmd));
 		rc = -EINVAL;
@@ -1147,7 +1198,7 @@ static int a2220_probe(
 	}
 
 	atomic_set(&a2220->opened, 1);
-	xo = msm_xo_get(MSM_XO_CXO, "audio_driver");
+	xo = msm_xo_get(MSM_XO_TCXO_D0, "audio_driver");
 	if (!xo) {
 		pr_err("please check the xo driver,something is wrong!!");
 		rc = -EAGAIN;

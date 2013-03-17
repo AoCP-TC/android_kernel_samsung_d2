@@ -19,7 +19,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
+#include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #ifndef __CHARGING_TEMPERATURE_DATA_H
 #define __CHARGING_TEMPERATURE_DATA_H __FILE__
 
@@ -29,7 +29,7 @@
 #define DEFAULT_LOW_RECOVER_TEMP	0
 
 #if defined(CONFIG_MACH_JAGUAR)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26250,	 800},
 	{26583,	 750},
 	{26979,	 700},
@@ -54,7 +54,7 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_M2_ATT)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26465,	 800},
 	{26749,	 750},
 	{27017,	 700},
@@ -79,8 +79,8 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_M2_SPR)
-static const int temp_table[][2] = {
-	{26385,	 800},
+static const struct pm8xxx_adc_map_pt temp_table[] = {
+	{26385, 800},
 	{26787,	 750},
 	{27136,	 700},
 	{27540,	 650},
@@ -104,7 +104,7 @@ static const int temp_table[][2] = {
 };
 
 #elif defined(CONFIG_MACH_M2_VZW)
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26537,	 800},
 	{26849,	 750},
 	{27211,	 700},
@@ -128,31 +128,46 @@ static const int temp_table[][2] = {
 	{41537,	-200},
 };
 
-#elif defined(CONFIG_MACH_GOGH)
-static const int temp_table[][2] = {
-	{24641,	 800},
-	{26757,	 750},
-	{27111,	 700},
-	{27516,	 650},
-	{27963,	 600},
-	{28494,	 550},
-	{29147,	 500},
-	{29735,	 450},
-	{30623,	 400},
-	{31484,	 350},
-	{32398,	 300},
-	{33407,	 250},
-	{34503,	 200},
-	{35478,	 150},
-	{36663,	 100},
-	{37711,	  50},
-	{38667,	   0},
-	{39556,	 -50},
-	{40274,	-100},
+#elif defined(CONFIG_MACH_GOGH) || defined(CONFIG_MACH_INFINITE)
+static const struct pm8xxx_adc_map_pt temp_table[] = {
+	{26478,	 800},
+	{27123,	 700},
+	{27985,	 600},
+	{29180,	 500},
+	{30704,	 400},
+	{32510,	 300},
+	{34595,	 200},
+	{36722,	 100},
+	{38530,	   0},
+	{40142,	-100},
+	{41321,	-200},
+};
+
+#elif defined(CONFIG_MACH_AEGIS2)
+static const struct pm8xxx_adc_map_pt temp_table[] = {
+	{27401,	 650},
+	{27790,	 600},
+	{28378,	 550},
+	{29190,	 500},
+	{29770,	 450},
+	{30676,	 400},
+	{31446,	 350},
+	{32493,	 300},
+	{33608,	 250},
+	{34631,	 200},
+	{35773,	 150},
+	{36814,	 100},
+	{37778,	  50},
+	{38570,	   0},
+	{39425,	 -50},
+	{40253,	-100},
+	{40886,	-150},
+	{41328,	-200},
+	{41656,	-250},
 };
 
 #else
-static const int temp_table[][2] = {
+static const struct pm8xxx_adc_map_pt temp_table[] = {
 	{26250,	 800},
 	{26583,	 750},
 	{26979,	 700},

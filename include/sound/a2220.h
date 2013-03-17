@@ -47,6 +47,8 @@ enum A2220_PathID {
 	A2220_PATH_RECORD_BT,
 	A2220_PATH_CAMCORDER,
 	A2220_PATH_INCALL_TTY,
+	A2220_PATH_PCMRESET,
+	A2220_PATH_FT_LOOPBACK,
 #ifdef AUDIENCE_BYPASS
 	A2220_PATH_BYPASS_MULTIMEDIA,
 #endif
@@ -217,7 +219,6 @@ enum A2220_NS_states {
 #define A2220_SLEEP             0
 #define A2220_ACTIVE            1
 #define A2220_CMD_FIFO_DEPTH    64
-#define ERROR                   0xffffffff
 
 enum A2220_config_mode {
 	A2220_CONFIG_FULL,

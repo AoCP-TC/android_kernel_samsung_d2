@@ -38,7 +38,6 @@
 #define PWM_DEVICE	1
 
 static bool g_bampenabled;
-static u8 pwr_on;
 
 static int32_t vibe_set_pwm_freq(int nForce)
 {
@@ -123,7 +122,9 @@ static int32_t ImmVibeSPI_ForceOut_AmpDisable(u_int8_t nActuatorIndex)
 			gpio_direction_output(vibrator_drvdata.haptic_pwr_en_gpio,1);
 		else
 			gpio_direction_output(vibrator_drvdata.haptic_pwr_en_gpio,0);
-		printk(KERN_DEBUG "tspdrv: %s\n", __func__);
+#if defined(CONFIG_MOTOR_DRV_MAX77693)
+		max77693_vibtonz_en(0);
+#endif
 	}
 
 	return VIBE_S_SUCCESS;
@@ -147,7 +148,9 @@ static int32_t ImmVibeSPI_ForceOut_AmpEnable(u_int8_t nActuatorIndex)
 			gpio_direction_output(vibrator_drvdata.haptic_pwr_en_gpio,0);
 		else
 			gpio_direction_output(vibrator_drvdata.haptic_pwr_en_gpio,1);
-		printk(KERN_DEBUG "tspdrv: %s\n", __func__);
+#if defined(CONFIG_MOTOR_DRV_MAX77693)
+		max77693_vibtonz_en(1);
+#endif
 	}
 
 	return VIBE_S_SUCCESS;

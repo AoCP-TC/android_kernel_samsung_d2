@@ -43,11 +43,11 @@
 #include "sii9234_driver.h"
 
 static int en_irq;
-static int g_mutex_cnt;
-static int g_cbus_mutex_cnt;
 #undef	__SII9234_MUTEX_DEBUG__
 #ifdef	__SII9234_MUTEX_DEBUG__
 
+static int g_mutex_cnt;
+static int g_cbus_mutex_cnt;
 #define	sii9234_mutex_lock(prm)	\
 	do { \
 		pr_debug("%s(%d)mutex++:%d\n", __func__, __LINE__,\
@@ -110,7 +110,9 @@ static u8 sii9234_tmds_control(struct sii9234_data *sii9234, bool enable);
 static bool cbus_command_request(struct sii9234_data *sii9234,
 				 enum cbus_command command,
 				 u8 offset, u8 data);
+#ifndef CONFIG_MHL_NEW_CBUS_MSC_CMD
 static void cbus_command_response(struct sii9234_data *sii9234);
+#endif
 static irqreturn_t sii9234_irq_thread(int irq, void *data);
 
 static struct cbus_packet cbus_pkt_buf[CBUS_PKT_BUF_COUNT];
@@ -122,9 +124,11 @@ static struct workqueue_struct *sii9234_msc_wq;
 #endif
 
 #ifdef CONFIG_MHL_D3_SUPPORT
-static void goto_d3();
+static void goto_d3(struct work_struct *work);
 #endif
-static cbus_command_abort_state;
+#ifdef  __CONFIG_USE_TIMER__
+static int cbus_command_abort_state;
+#endif
 static int sii9234_callback_sched;
 static int d3_mode_rgnd_state;
 #ifdef CONFIG_MHL_SWING_LEVEL
@@ -178,7 +182,6 @@ u8 mhl_onoff_ex(bool onoff)
 		pr_info("mhl_onoff_ex: getting resource is failed\n");
 		return 2;
 	}
-
 	if (sii9234->pdata->power_state == onoff) {
 		pr_info("mhl_onoff_ex: mhl already %s\n", onoff ? "on" : "off");
 		return 2;
@@ -198,10 +201,10 @@ u8 mhl_onoff_ex(bool onoff)
 #ifdef CONFIG_MHL_D3_SUPPORT
 		detached_status = 0;
 		d3_mode_rgnd_state = 0;
-		goto_d3();
+		goto_d3(NULL);
 		return 2;
 #else
-		sii9234_detection_callback();
+		sii9234_detection_callback(NULL);
 #endif
 	} else {
 		sii9234_cancel_callback();
@@ -888,14 +891,15 @@ void mhl_path_enable(struct sii9234_data *sii9234, bool path_en)
 #endif
 }
 
+#if 0
 static void cbus_handle_wrt_burst_recd(struct sii9234_data *sii9234)
 {
 	pr_debug("sii9234: CBUS WRT_BURST_RECD\n");
 }
-
+#endif
 static void cbus_handle_wrt_stat_recd(struct sii9234_data *sii9234)
 {
-	u8 status_reg0, status_reg1, value;
+	u8 status_reg0, status_reg1;
 
 	pr_debug("sii9234: CBUS WRT_STAT_RECD\n");
 
@@ -1217,14 +1221,14 @@ int rsen_state_timer_out(struct sii9234_data *sii9234)
 err_exit:
 	/*turn off mhl and change usb_sel to usb*/
 #ifdef CONFIG_MHL_D3_SUPPORT
-	goto_d3();
+	goto_d3(NULL);
 #else
 	mhl_onoff_ex(0);
 #endif
 	return ret;
 }
 #ifdef CONFIG_MHL_D3_SUPPORT
-static void goto_d3(void)
+static void goto_d3(struct work_struct *work)
 {
 	struct sii9234_data *sii9234 = dev_get_drvdata(sii9244_mhldev);
 	int ret;
@@ -1410,6 +1414,9 @@ void sii9234_process_msc_work(struct work_struct *work)
 	struct sii9234_data *sii9234 = container_of(work,
 						struct sii9234_data,
 						msc_work);
+	/*Do not process msc untill STATE_ESTABLISHED*/
+	if (sii9234->state != STATE_ESTABLISHED)
+		return;
 
 	mutex_lock(&sii9234->cbus_lock);
 	mutex_lock(&sii9234->lock);
@@ -1445,8 +1452,29 @@ void sii9234_process_msc_work(struct work_struct *work)
 		case CBUS_WRITE_STAT:
 			break;
 		case CBUS_SET_INT:
+			if ((p_msc_pkt->offset == MHL_RCHANGE_INT) &&
+				(p_msc_pkt->data_1 == MHL_INT_DSCR_CHG)) {
+				/*
+				*Write burst final step
+				*Req->GRT->Write->DSCR
+				*/
+				pr_debug("sii9234: MHL_RCHANGE_INT &"
+					"MHL_INT_DSCR_CHG\n");
+			} else if ((p_msc_pkt->offset == MHL_RCHANGE_INT) &&
+				(p_msc_pkt->data_1 == MHL_INT_DCAP_CHG)) {
+				pr_debug("sii9234: MHL_RCHANGE_INT &"
+					"MHL_INT_DCAP_CHG\n");
+				sii9234->cbus_pkt.command = CBUS_IDLE;
+				sii9234_enqueue_msc_work(sii9234,
+					CBUS_WRITE_STAT,
+					MHL_STATUS_REG_CONNECTED_RDY,
+					MHL_STATUS_DCAP_READY, 0x0);
+			}
 			break;
 		case CBUS_WRITE_BURST:
+			sii9234_enqueue_msc_work(sii9234, CBUS_SET_INT,
+						MHL_RCHANGE_INT,
+						MHL_INT_DSCR_CHG, 0x0);
 			break;
 		case CBUS_READ_DEVCAP:
 			ret = cbus_read_reg(sii9234,
@@ -1593,8 +1621,6 @@ static int sii9234_msc_req_locked(struct sii9234_data *sii9234,
 	int ret;
 	u8 start_command;
 
-	if (sii9234->state != STATE_ESTABLISHED)
-		return -ENOENT;
 
 	init_completion(&sii9234->msc_complete);
 
@@ -1667,7 +1693,7 @@ static void mhl_cbus_write_stat_worker(struct work_struct *p)
 #endif
 	return;
 }
-static int sii9234_detection_callback(void)
+static void sii9234_detection_callback(struct work_struct *work)
 {
 	struct sii9234_data *sii9234 = dev_get_drvdata(sii9244_mhldev);
 	int ret;
@@ -1845,7 +1871,6 @@ static int sii9234_detection_callback(void)
 	ret = sii9234_cbus_init(sii9234);
 	if (ret < 0)
 		goto unhandled;
-
 	ret = mhl_tx_write_reg(sii9234, MHL_TX_DISC_CTRL1_REG, 0x27);
 	if (ret < 0)
 		goto unhandled;
@@ -1929,7 +1954,7 @@ static int sii9234_detection_callback(void)
 	/*CTS 3.3.14.3 Discovery;Sink Never Drives MHL+/- HIGH*/
 	/*MHL SPEC 8.2.1.1.1;Transition SRC4-SRC7*/
 	if (rsen_state_timer_out(sii9234) < 0)
-		return handled;
+		return;
 
 	sii9234->claimed = true;
 
@@ -1983,7 +2008,7 @@ static int sii9234_detection_callback(void)
 		sii9234->pdata->vbus_present(true);
 #endif
 
-	return handled;
+	return;
 
 unhandled:
 	pr_info("sii9234: Detection failed");
@@ -1993,7 +2018,7 @@ unhandled:
 #ifndef CONFIG_MHL_D3_SUPPORT
 		mhl_onoff_ex(0);
 #endif
-		return handled;
+		return;
 	} else if (sii9234->state == STATE_DISCOVERY_FAILED)
 		pr_cont(" (discovery failed)");
 	else if (sii9234->state == STATE_CBUS_LOCKOUT)
@@ -2023,7 +2048,7 @@ unhandled:
 
 	sii9234_mutex_unlock(&sii9234->lock);
 
-	return handled;
+	return;
 }
 
 static void sii9234_cancel_callback(void)
@@ -2053,7 +2078,7 @@ static void save_cbus_pkt_to_buffer(struct sii9234_data *sii9234)
 					sizeof(struct cbus_packet));
 	sii9234->cbus_pkt_buf[index].status = true;
 }
-
+#ifndef CONFIG_MHL_NEW_CBUS_MSC_CMD
 static void cbus_command_response(struct sii9234_data *sii9234)
 {
 	u8 value, offset = 0;
@@ -2211,7 +2236,7 @@ static void cbus_command_response(struct sii9234_data *sii9234)
 		cbus_command_request(sii9234, CBUS_READ_DEVCAP,
 						offset, 0x00);
 }
-
+#endif
 #ifdef DEBUG_MHL
 static void cbus_command_response_dbg_msg(struct sii9234_data *sii9234,
 							 u8 index)
@@ -2236,7 +2261,7 @@ static void cbus_command_response_dbg_msg(struct sii9234_data *sii9234,
 					sii9234->cbus_pkt.offset);
 }
 #endif
-
+#ifndef CONFIG_MHL_NEW_CBUS_MSC_CMD
 static void cbus_command_response_all(struct sii9234_data *sii9234)
 {
 	u8 index;
@@ -2263,7 +2288,7 @@ static void cbus_command_response_all(struct sii9234_data *sii9234)
 		}
 	}
 }
-
+#endif
 static bool cbus_command_request(struct sii9234_data *sii9234,
 				 enum cbus_command command, u8 offset, u8 data)
 {
@@ -2465,7 +2490,7 @@ static irqreturn_t sii9234_irq_thread(int irq, void *data)
 	if (intr4 & RGND_READY_INT) {
 #ifdef CONFIG_MHL_D3_SUPPORT
 			if (sii9234_callback_sched == 0) {
-				pr_debug("rgnd interrupt debug\n");
+				pr_info("rgnd interrupt debug\n");
 				INIT_WORK(&sii9234->rgnd_work,
 						sii9234_detection_callback);
 				sii9234_disable_irq();
@@ -2484,11 +2509,11 @@ static irqreturn_t sii9234_irq_thread(int irq, void *data)
 
 		switch (value & RGND_INTP_MASK) {
 		case RGND_INTP_OPEN:
-			pr_debug("sii9234: RGND Open\n");
+			pr_info("sii9234: RGND Open\n");
 			sii9234->rgnd = RGND_OPEN;
 			break;
 		case RGND_INTP_1K:
-			pr_debug("sii9234: RGND 1K\n");
+			pr_info("sii9234: RGND 1K\n");
 			/* After applying RGND patch, there is some issue
 			about discovry failure
 			This point is add to fix that problem*/
@@ -2529,11 +2554,11 @@ static irqreturn_t sii9234_irq_thread(int irq, void *data)
 			break;
 
 		case RGND_INTP_2K:
-			pr_debug("sii9234: RGND 2K\n");
+			pr_info("sii9234: RGND 2K\n");
 			sii9234->rgnd = RGND_2K;
 			break;
 		case RGND_INTP_SHORT:
-			pr_debug("sii9234: RGND Short\n");
+			pr_info("sii9234: RGND Short\n");
 			sii9234->rgnd = RGND_SHORT;
 			break;
 		};
@@ -2793,7 +2818,7 @@ err_exit2:
 #ifdef CONFIG_MHL_D3_SUPPORT
 		if (sii9234_callback_sched != 0) {
 			sii9234_disable_irq();
-			goto_d3();
+			goto_d3(NULL);
 		}
 #else
 		mhl_onoff_ex(0);
@@ -2814,8 +2839,9 @@ static void mhl_cbus_command_timer(unsigned long data)
 }
 #ifdef MHL_SS_FACTORY
 #define SII_ID 0x92
-static ssize_t sysfs_check_mhl_command(struct device *dev,
-			struct device_attribute *attr, char *buf)
+static ssize_t sysfs_check_mhl_command(struct class *class, struct class_attribute *attr,
+			char *buf)
+
 {
 	int size;
 	u8 sii_id = 0;
@@ -2991,10 +3017,10 @@ static int __devinit sii9234_mhl_tx_i2c_probe(struct i2c_client *client,
 err_exit2c:
 #ifdef CONFIG_MHL_SWING_LEVEL
 	class_remove_file(sec_mhl, &class_attr_swing);
-#endif
 err_exit2b:
 #ifdef MHL_SS_FACTORY
 	class_destroy(sec_mhl);
+#endif
 #endif
 err_exit2a:
 #if defined(MHL_SS_FACTORY) || defined(CONFIG_MHL_SWING_LEVEL)

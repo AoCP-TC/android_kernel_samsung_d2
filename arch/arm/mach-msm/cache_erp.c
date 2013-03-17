@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,7 +17,11 @@
 #include <linux/errno.h>
 #include <linux/proc_fs.h>
 #include <linux/cpu.h>
+#include <linux/io.h>
 #include <mach/msm-krait-l2-accessors.h>
+#include <mach/msm_iomap.h>
+#include <asm/cputype.h>
+#include "acpuclock.h"
 
 #define CESR_DCTPE		BIT(0)
 #define CESR_DCDPE		BIT(1)
@@ -30,6 +34,9 @@
 
 /* Print a message for everything but TLB MH events */
 #define CESR_PRINT_MASK		0x000000FF
+
+/* Log everything but TLB MH events */
+#define CESR_LOG_EVENT_MASK	0x000000FF
 
 #define L2ESR_IND_ADDR		0x204
 #define L2ESYNR0_IND_ADDR	0x208
@@ -46,6 +53,8 @@
 #define L2ESR_MSE		BIT(6)
 #define L2ESR_MPLDREXNOK	BIT(8)
 
+#define L2ESR_ACCESS_ERR_MASK	0xFFFC
+
 #define L2ESR_CPU_MASK		0x0F
 #define L2ESR_CPU_SHIFT		16
 
@@ -58,13 +67,19 @@
 #ifdef CONFIG_MSM_L2_ERP_PORT_PANIC
 #define ERP_PORT_ERR(a) panic(a)
 #else
-#define ERP_PORT_ERR(a) do { } while (0)
+#define ERP_PORT_ERR(a) WARN(1, a)
 #endif
 
 #ifdef CONFIG_MSM_L2_ERP_1BIT_PANIC
 #define ERP_1BIT_ERR(a) panic(a)
 #else
 #define ERP_1BIT_ERR(a) do { } while (0)
+#endif
+
+#ifdef CONFIG_MSM_L2_ERP_PRINT_ACCESS_ERRORS
+#define print_access_errors()	1
+#else
+#define print_access_errors()	0
 #endif
 
 #ifdef CONFIG_MSM_L2_ERP_2BIT_PANIC
@@ -74,6 +89,9 @@
 #endif
 
 #define MODULE_NAME "msm_cache_erp"
+
+#define ERP_LOG_MAGIC_ADDR	0x6A4
+#define ERP_LOG_MAGIC		0x11C39893
 
 struct msm_l1_err_stats {
 	unsigned int dctpe;
@@ -102,9 +120,9 @@ static struct msm_l2_err_stats msm_l2_erp_stats;
 static int l1_erp_irq, l2_erp_irq;
 static struct proc_dir_entry *procfs_entry;
 
-static unsigned int l2_err_msg_mask = (L2ESR_MPDCD | L2ESR_TSESB
-	| L2ESR_TSEDB | L2ESR_DSESB | L2ESR_DSEDB | L2ESR_MSE
-	| L2ESR_MPLDREXNOK);
+#ifdef CONFIG_MSM_L1_ERR_LOG
+static struct proc_dir_entry *procfs_log_entry;
+#endif
 
 static inline unsigned int read_cesr(void)
 {
@@ -184,16 +202,62 @@ static int proc_read_status(char *page, char **start, off_t off, int count,
 	return len;
 }
 
+#ifdef CONFIG_MSM_L1_ERR_LOG
+static int proc_read_log(char *page, char **start, off_t off, int count,
+	int *eof, void *data)
+{
+	char *p = page;
+	int len, log_value;
+	log_value = __raw_readl(MSM_IMEM_BASE + ERP_LOG_MAGIC_ADDR) ==
+			ERP_LOG_MAGIC ? 1 : 0;
+
+	p += snprintf(p, PAGE_SIZE, "%d\n", log_value);
+
+	len = (p - page) - off;
+	if (len < 0)
+		len = 0;
+
+	*eof = (len <= count) ? 1 : 0;
+	*start = page + off;
+
+	return len;
+}
+
+static void log_cpu_event(void)
+{
+	__raw_writel(ERP_LOG_MAGIC, MSM_IMEM_BASE + ERP_LOG_MAGIC_ADDR);
+	mb();
+}
+
+static int procfs_event_log_init(void)
+{
+	procfs_log_entry = create_proc_entry("cpu/msm_erp_log", S_IRUGO, NULL);
+
+	if (!procfs_log_entry)
+		return -ENODEV;
+	procfs_log_entry->read_proc = proc_read_log;
+	return 0;
+}
+
+#else
+static inline void log_cpu_event(void) { }
+static inline int procfs_event_log_init(void) { return 0; }
+#endif
+
 static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 {
 	struct msm_l1_err_stats *l1_stats = dev_id;
 	unsigned int cesr = read_cesr();
 	unsigned int i_cesynr, d_cesynr;
+	unsigned int cpu = smp_processor_id();
 	int print_regs = cesr & CESR_PRINT_MASK;
+	int log_event = cesr & CESR_LOG_EVENT_MASK;
 
 	if (print_regs) {
-		pr_alert("L1 Error detected on CPU %d!\n", smp_processor_id());
-		pr_alert("\tCESR    = 0x%08x\n", cesr);
+		pr_alert("L1 / TLB Error detected on CPU %d!\n", cpu);
+		pr_alert("\tCESR      = 0x%08x\n", cesr);
+		pr_alert("\tCPU speed = %lu\n", acpuclk_get_rate(cpu));
+		pr_alert("\tMIDR      = 0x%08x\n", read_cpuid_id());
 	}
 
 	if (cesr & CESR_DCTPE) {
@@ -249,6 +313,9 @@ static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 		pr_alert("D-side CESYNR = 0x%08x\n", d_cesynr);
 	}
 
+	if (log_event)
+		log_cpu_event();
+
 	/* Clear the interrupt bits we processed */
 	write_cesr(cesr);
 
@@ -268,6 +335,7 @@ static irqreturn_t msm_l2_erp_irq(int irq, void *dev_id)
 	int soft_error = 0;
 	int port_error = 0;
 	int unrecoverable = 0;
+	int print_alert;
 
 	l2esr = get_l2_indirect_reg(L2ESR_IND_ADDR);
 	l2esynr0 = get_l2_indirect_reg(L2ESYNR0_IND_ADDR);
@@ -275,7 +343,9 @@ static irqreturn_t msm_l2_erp_irq(int irq, void *dev_id)
 	l2ear0 = get_l2_indirect_reg(L2EAR0_IND_ADDR);
 	l2ear1 = get_l2_indirect_reg(L2EAR1_IND_ADDR);
 
-	if (l2esr & l2_err_msg_mask) {
+	print_alert = print_access_errors() || (l2esr & L2ESR_ACCESS_ERR_MASK);
+
+	if (print_alert) {
 		pr_alert("L2 Error detected!\n");
 		pr_alert("\tL2ESR    = 0x%08x\n", l2esr);
 		pr_alert("\tL2ESYNR0 = 0x%08x\n", l2esynr0);
@@ -283,68 +353,62 @@ static irqreturn_t msm_l2_erp_irq(int irq, void *dev_id)
 		pr_alert("\tL2EAR0   = 0x%08x\n", l2ear0);
 		pr_alert("\tL2EAR1   = 0x%08x\n", l2ear1);
 		pr_alert("\tCPU bitmap = 0x%x\n", (l2esr >> L2ESR_CPU_SHIFT) &
-						    L2ESR_CPU_MASK);
+							L2ESR_CPU_MASK);
 	}
 
 	if (l2esr & L2ESR_MPDCD) {
-		if (l2esr & l2_err_msg_mask)
+		if (print_alert)
 			pr_alert("L2 master port decode error\n");
 		port_error++;
 		msm_l2_erp_stats.mpdcd++;
 	}
 
 	if (l2esr & L2ESR_MPSLV) {
-		if (l2esr & l2_err_msg_mask)
+		if (print_alert)
 			pr_alert("L2 master port slave error\n");
 		port_error++;
 		msm_l2_erp_stats.mpslv++;
 	}
 
 	if (l2esr & L2ESR_TSESB) {
-		if (l2esr & l2_err_msg_mask)
-			pr_alert("L2 tag soft error, single-bit\n");
+		pr_alert("L2 tag soft error, single-bit\n");
 		soft_error++;
 		msm_l2_erp_stats.tsesb++;
 	}
 
 	if (l2esr & L2ESR_TSEDB) {
-		if (l2esr & l2_err_msg_mask)
-			pr_alert("L2 tag soft error, double-bit\n");
+		pr_alert("L2 tag soft error, double-bit\n");
 		soft_error++;
 		unrecoverable++;
 		msm_l2_erp_stats.tsedb++;
 	}
 
 	if (l2esr & L2ESR_DSESB) {
-		if (l2esr & l2_err_msg_mask)
-			pr_alert("L2 data soft error, single-bit\n");
+		pr_alert("L2 data soft error, single-bit\n");
 		soft_error++;
 		msm_l2_erp_stats.dsesb++;
 	}
 
 	if (l2esr & L2ESR_DSEDB) {
-		if (l2esr & l2_err_msg_mask)
-			pr_alert("L2 data soft error, double-bit\n");
+		pr_alert("L2 data soft error, double-bit\n");
 		soft_error++;
 		unrecoverable++;
 		msm_l2_erp_stats.dsedb++;
 	}
 
 	if (l2esr & L2ESR_MSE) {
-		if (l2esr & l2_err_msg_mask)
-			pr_alert("L2 modified soft error\n");
+		pr_alert("L2 modified soft error\n");
 		soft_error++;
 		msm_l2_erp_stats.mse++;
 	}
 
 	if (l2esr & L2ESR_MPLDREXNOK) {
-		if (l2esr & l2_err_msg_mask)
-			pr_alert("L2 master port LDREX received Normal OK response\n");
+		pr_alert("L2 master port LDREX received Normal OK response\n");
 		port_error++;
 		msm_l2_erp_stats.mplxrexnok++;
 	}
 
-	if (port_error && (l2esr & l2_err_msg_mask))
+	if (port_error && print_alert)
 		ERP_PORT_ERR("L2 master port error detected");
 
 	if (soft_error && !unrecoverable)
@@ -440,6 +504,11 @@ static int msm_cache_erp_probe(struct platform_device *pdev)
 	put_online_cpus();
 
 	procfs_entry->read_proc = proc_read_status;
+
+	ret = procfs_event_log_init();
+	if (ret)
+		pr_err("Failed to create procfs node for ERP log access\n");
+
 	return 0;
 
 fail_l2:
@@ -470,12 +539,18 @@ static int msm_cache_erp_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static struct of_device_id cache_erp_match_table[] = {
+	{	.compatible = "qcom,cache_erp",	},
+	{}
+};
+
 static struct platform_driver msm_cache_erp_driver = {
 	.probe = msm_cache_erp_probe,
 	.remove = msm_cache_erp_remove,
 	.driver = {
 		.name = MODULE_NAME,
 		.owner = THIS_MODULE,
+		.of_match_table = cache_erp_match_table,
 	},
 };
 

@@ -2073,10 +2073,6 @@ static int dvb_dmxdev_ts_event_cb(struct dmx_ts_feed *feed,
 		return 0;
 	}
 
-<<<<<<< HEAD
-	if ((dmxdevfilter->params.pes.output == DMX_OUT_DECODER) ||
-		(buffer->error)) {
-=======
 	if (dmxdevfilter->params.pes.output == DMX_OUT_DECODER) {
 		if (DMX_OVERRUN_ERROR == dmx_data_ready->status) {
 			dprintk("dmxdev: buffer overflow\n");
@@ -2089,7 +2085,6 @@ static int dvb_dmxdev_ts_event_cb(struct dmx_ts_feed *feed,
 	}
 
 	if (buffer->error) {
->>>>>>> 18d0b259e52a4948e3733f165416899b938ec282
 		spin_unlock(&dmxdevfilter->dev->lock);
 		wake_up_all(&buffer->queue);
 		return 0;

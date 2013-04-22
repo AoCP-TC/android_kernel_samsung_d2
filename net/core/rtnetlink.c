@@ -2050,11 +2050,7 @@ static int rtnetlink_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 		struct rtattr *attr = (void *)nlh + NLMSG_ALIGN(min_len);
 
 		while (RTA_OK(attr, attrlen)) {
-<<<<<<< HEAD
-			unsigned flavor = attr->rta_type;
-=======
 			unsigned int flavor = attr->rta_type & NLA_TYPE_MASK;
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 			if (flavor) {
 				if (flavor > rta_max[sz_idx])
 					return -EINVAL;

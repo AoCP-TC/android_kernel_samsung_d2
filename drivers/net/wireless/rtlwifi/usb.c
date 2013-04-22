@@ -853,6 +853,10 @@ static void _rtl_usb_transmit(struct ieee80211_hw *hw, struct sk_buff *skb,
 	if (unlikely(!_urb)) {
 		RT_TRACE(rtlpriv, COMP_ERR, DBG_EMERG,
 			 "Can't allocate urb. Drop skb!\n");
+<<<<<<< HEAD
+=======
+		kfree_skb(skb);
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 		return;
 	}
 	urb_list = &rtlusb->tx_pending[ep_num];

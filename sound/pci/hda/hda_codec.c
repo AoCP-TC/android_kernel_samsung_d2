@@ -165,7 +165,11 @@ const char *snd_hda_get_jack_type(u32 cfg)
 		"Line Out", "Speaker", "HP Out", "CD",
 		"SPDIF Out", "Digital Out", "Modem Line", "Modem Hand",
 		"Line In", "Aux", "Mic", "Telephony",
+<<<<<<< HEAD
 		"SPDIF In", "Digitial In", "Reserved", "Other"
+=======
+		"SPDIF In", "Digital In", "Reserved", "Other"
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 	};
 
 	return jack_types[(cfg & AC_DEFCFG_DEVICE)
@@ -2910,7 +2914,11 @@ static unsigned int convert_to_spdif_status(unsigned short val)
 	if (val & AC_DIG1_PROFESSIONAL)
 		sbits |= IEC958_AES0_PROFESSIONAL;
 	if (sbits & IEC958_AES0_PROFESSIONAL) {
+<<<<<<< HEAD
 		if (sbits & AC_DIG1_EMPHASIS)
+=======
+		if (val & AC_DIG1_EMPHASIS)
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 			sbits |= IEC958_AES0_PRO_EMPHASIS_5015;
 	} else {
 		if (val & AC_DIG1_EMPHASIS)

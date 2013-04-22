@@ -711,8 +711,14 @@ static int check_input_term(struct mixer_build *state, int id, struct usb_audio_
 		case UAC2_CLOCK_SELECTOR: {
 			struct uac_selector_unit_descriptor *d = p1;
 			/* call recursively to retrieve the channel info */
+<<<<<<< HEAD
 			if (check_input_term(state, d->baSourceID[0], term) < 0)
 				return -ENODEV;
+=======
+			err = check_input_term(state, d->baSourceID[0], term);
+			if (err < 0)
+				return err;
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 			term->type = d->bDescriptorSubtype << 16; /* virtual type */
 			term->id = id;
 			term->name = uac_selector_unit_iSelector(d);
@@ -1263,8 +1269,14 @@ static int parse_audio_feature_unit(struct mixer_build *state, int unitid, void 
 		return err;
 
 	/* determine the input source type and name */
+<<<<<<< HEAD
 	if (check_input_term(state, hdr->bSourceID, &iterm) < 0)
 		return -EINVAL;
+=======
+	err = check_input_term(state, hdr->bSourceID, &iterm);
+	if (err < 0)
+		return err;
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 
 	master_bits = snd_usb_combine_bytes(bmaControls, csize);
 	/* master configuration quirks */
@@ -2025,7 +2037,11 @@ static int snd_usb_mixer_controls(struct usb_mixer_interface *mixer)
 			state.oterm.type = le16_to_cpu(desc->wTerminalType);
 			state.oterm.name = desc->iTerminal;
 			err = parse_audio_unit(&state, desc->bSourceID);
+<<<<<<< HEAD
 			if (err < 0)
+=======
+			if (err < 0 && err != -EINVAL)
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 				return err;
 		} else { /* UAC_VERSION_2 */
 			struct uac2_output_terminal_descriptor *desc = p;
@@ -2037,12 +2053,20 @@ static int snd_usb_mixer_controls(struct usb_mixer_interface *mixer)
 			state.oterm.type = le16_to_cpu(desc->wTerminalType);
 			state.oterm.name = desc->iTerminal;
 			err = parse_audio_unit(&state, desc->bSourceID);
+<<<<<<< HEAD
 			if (err < 0)
+=======
+			if (err < 0 && err != -EINVAL)
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 				return err;
 
 			/* for UAC2, use the same approach to also add the clock selectors */
 			err = parse_audio_unit(&state, desc->bCSourceID);
+<<<<<<< HEAD
 			if (err < 0)
+=======
+			if (err < 0 && err != -EINVAL)
+>>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 				return err;
 		}
 	}

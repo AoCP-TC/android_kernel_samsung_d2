@@ -1082,11 +1082,8 @@ static const struct snd_soc_dapm_route wm8903_intercon[] = {
 	{ "ROP", NULL, "Right Speaker PGA" },
 	{ "RON", NULL, "Right Speaker PGA" },
 
-<<<<<<< HEAD
-=======
 	{ "Charge Pump", NULL, "CLK_DSP" },
 
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 	{ "Left Headphone Output PGA", NULL, "Charge Pump" },
 	{ "Right Headphone Output PGA", NULL, "Charge Pump" },
 	{ "Left Line Output PGA", NULL, "Charge Pump" },

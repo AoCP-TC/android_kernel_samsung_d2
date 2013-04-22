@@ -71,10 +71,7 @@ static int voice_cvs_stop_record(struct voice_data *v);
 static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv);
 static int32_t qdsp_cvs_callback(struct apr_client_data *data, void *priv);
 static int32_t qdsp_cvp_callback(struct apr_client_data *data, void *priv);
-<<<<<<< HEAD
-=======
 static int voice_send_set_device_cmd_v2(struct voice_data *v);
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 
 static u16 voice_get_mvm_handle(struct voice_data *v)
 {
@@ -1205,11 +1202,7 @@ static int voice_send_set_device_cmd(struct voice_data *v)
 						APR_PKT_VER);
 	cvp_setdev_cmd.hdr.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
 				sizeof(cvp_setdev_cmd) - APR_HDR_SIZE);
-<<<<<<< HEAD
-	pr_debug(" send create cvp setdev, pkt size = %d\n",
-=======
 	pr_debug("send create cvp setdev, pkt size = %d\n",
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 			cvp_setdev_cmd.hdr.pkt_size);
 	cvp_setdev_cmd.hdr.src_port = v->session_id;
 	cvp_setdev_cmd.hdr.dest_port = cvp_handle;
@@ -1255,8 +1248,6 @@ fail:
 	return -EINVAL;
 }
 
-<<<<<<< HEAD
-=======
 static int voice_send_set_device_cmd_v2(struct voice_data *v)
 {
 	struct cvp_set_device_cmd_v2  cvp_setdev_cmd_v2;
@@ -1342,7 +1333,6 @@ fail:
 	return -EINVAL;
 }
 
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 static int voice_send_stop_voice_cmd(struct voice_data *v)
 {
 	struct apr_hdr mvm_stop_voice_cmd;
@@ -2250,9 +2240,6 @@ static int voice_setup_vocproc(struct voice_data *v)
 		pr_err("%s: wait_event timeout\n", __func__);
 		goto fail;
 	}
-<<<<<<< HEAD
-
-=======
 	if (common.ec_ref_ext == true) {
 		ret = voice_send_set_device_cmd_v2(v);
 		if (ret < 0)
@@ -2260,7 +2247,6 @@ static int voice_setup_vocproc(struct voice_data *v)
 			       __func__, ret);
 			goto fail;
 	}
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 	/* send cvs cal */
 	ret = voice_send_cvs_map_memory_cmd(v);
 	if (!ret)
@@ -3211,12 +3197,8 @@ int voc_disable_cvp(uint16_t session_id)
 		voice_send_cvp_deregister_vol_cal_table_cmd(v);
 		voice_send_cvp_deregister_cal_cmd(v);
 		voice_send_cvp_unmap_memory_cmd(v);
-<<<<<<< HEAD
-
-=======
 		if (common.ec_ref_ext == true)
 			voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 		v->voc_state = VOC_CHANGE;
 	}
 
@@ -3240,12 +3222,6 @@ int voc_enable_cvp(uint16_t session_id)
 	mutex_lock(&v->lock);
 
 	if (v->voc_state == VOC_CHANGE) {
-<<<<<<< HEAD
-		ret = voice_send_set_device_cmd(v);
-		if (ret < 0) {
-			pr_err("%s:  set device failed\n", __func__);
-			goto fail;
-=======
 
 		if (common.ec_ref_ext == true) {
 			ret = voice_send_set_device_cmd_v2(v);
@@ -3260,7 +3236,6 @@ int voc_enable_cvp(uint16_t session_id)
 				       __func__, ret);
 				goto fail;
 			}
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 		}
 		/* send cvp and vol cal */
 		ret = voice_send_cvp_map_memory_cmd(v);
@@ -3644,12 +3619,8 @@ int voc_end_voice_call(uint16_t session_id)
 		if (ret < 0)
 			pr_err("%s:  destroy voice failed\n", __func__);
 		voice_destroy_mvm_cvs_session(v);
-<<<<<<< HEAD
-
-=======
 		if (common.ec_ref_ext == true)
 			voc_set_ext_ec_ref(AFE_PORT_INVALID, false);
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 		v->voc_state = VOC_RELEASE;
 	}
 	mutex_unlock(&v->lock);
@@ -3819,8 +3790,6 @@ fail:
 	return ret;
 }
 
-<<<<<<< HEAD
-=======
 int voc_set_ext_ec_ref(uint16_t port_id, bool state)
 {
 	int ret = 0;
@@ -3843,7 +3812,6 @@ fail:
 	return ret;
 }
 
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 void voc_register_mvs_cb(ul_cb_fn ul_cb,
 			   dl_cb_fn dl_cb,
 			   void *private_data)
@@ -4165,10 +4133,7 @@ static int32_t qdsp_cvp_callback(struct apr_client_data *data, void *priv)
 				wake_up(&v->cvp_wait);
 				break;
 			case VSS_IVOCPROC_CMD_SET_DEVICE:
-<<<<<<< HEAD
-=======
 			case VSS_IVOCPROC_CMD_SET_DEVICE_V2:
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 			case VSS_IVOCPROC_CMD_SET_RX_VOLUME_INDEX:
 			case VSS_IVOCPROC_CMD_ENABLE:
 			case VSS_IVOCPROC_CMD_DISABLE:
@@ -4281,11 +4246,7 @@ static int __init voice_init(void)
 	common.default_mute_val = 0;  /* default is un-mute */
 	common.default_vol_val = 0;
 	common.default_sample_val = 8000;
-<<<<<<< HEAD
-
-=======
 	common.ec_ref_ext = false;
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 	/* Initialize MVS info. */
 	common.mvs_info.network_type = VSS_NETWORK_ID_DEFAULT;
 

@@ -727,26 +727,19 @@ int main(void)
 		len = recvfrom(fd, kvp_recv_buffer, sizeof(kvp_recv_buffer), 0,
 				addr_p, &addr_l);
 
-<<<<<<< HEAD
-		if (len < 0 || addr.nl_pid) {
-=======
 		if (len < 0) {
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 			syslog(LOG_ERR, "recvfrom failed; pid:%u error:%d %s",
 					addr.nl_pid, errno, strerror(errno));
 			close(fd);
 			return -1;
 		}
 
-<<<<<<< HEAD
-=======
 		if (addr.nl_pid) {
 			syslog(LOG_WARNING, "Received packet from untrusted pid:%u",
 					addr.nl_pid);
 			continue;
 		}
 
->>>>>>> 059938b8ad1f46031f92f23e1cfbfa7fa28e3db4
 		incoming_msg = (struct nlmsghdr *)kvp_recv_buffer;
 		incoming_cn_msg = (struct cn_msg *)NLMSG_DATA(incoming_msg);
 		hv_msg = (struct hv_kvp_msg *)incoming_cn_msg->data;
